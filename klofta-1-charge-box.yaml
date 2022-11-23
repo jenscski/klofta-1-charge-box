@@ -10,34 +10,55 @@ esphome:
     - light.turn_on:
         id: status_led
         brightness: 25%
+        red: 1
+        green: 0
+        blue: 0
+    - delay: 2s
+#    - climate.control:
+#        id: box_thermostat
+#        mode: COOL
+#        preset: HOME
+    - light.turn_on:
+        id: status_led
+        brightness: 25%
         red: 0
         green: 1
         blue: 0
-    - delay: 2s
-    - climate.control:
-        id: box_thermostat
-        mode: COOL
-        preset: HOME
 
 esp32:
-  board: esp32dev
+  board: adafruit_qtpy_esp32
   framework:
     type: arduino
+    version: 2.0.5
+    platform_version: 5.2.0
 
 external_components:
   - source: github://jenscski/esphome-components@main
     components: [ sh1107_base, sh1107_i2c ]
-  - source: github://pr#3830
-    components: [ esp32 ]
+  - source: github://jenscski/esphome@adafruit_qtpy_esp32_v2
+    refresh: 0s
+    components: [ esp32, dallas, wifi ]
 
 i2c:
   frequency: 800kHz
   scan: true
-  sda: 22
-  scl: 19
+  sda: SDA1
+  scl: SCL1
 
 api:
 
+logger:
+#  level: VERY_VERBOSE
+  logs:
+#    dallas.sensor: VERY_VERBOSE
+    sensor: INFO
+    climate: INFO
+    pulse_counter: INFO
+#    json: DEBUG
+#    sensor.filter: DEBUG
+#    api.service: DEBUG
+#    scheduler: DEBUG
+    
 ota:
   password: !secret 'ota_password'
 
@@ -48,32 +69,16 @@ wifi:
     priority: 0.0
 
 dallas:
-  - pin: 26
+  - pin: A3
     update_interval: 1s
 
-#web_server:
-#  local: true
-#  ota: false
-
-logger:
-#  level: VERY_VERBOSE
-  logs:
-    dallas.sensor: INFO
-    sensor: INFO
-    climate: INFO
-    pulse_counter: INFO
-#    json: DEBUG
-#    sensor.filter: DEBUG
-#    api.service: DEBUG
-#    scheduler: DEBUG
-    
 switch:
   - platform: restart
     name: "${friendly_name} Restart"
   - platform: gpio
     name: "NeoPixel Power"
     internal: true
-    pin: 8
+    pin: NEOPIXEL_POWER
     restore_mode: ALWAYS_ON
 
 light:
@@ -83,7 +88,7 @@ light:
     id: status_led
     type: GRB
     variant: WS2812X
-    pin: 5
+    pin: PIN_NEOPIXEL
     num_leds: 1
 
 sensor:
@@ -95,17 +100,7 @@ sensor:
   name: "${friendly_name} RPM"
   update_interval: 1s
   id: foo
-  pin: 27
-
-#- platform: tmp117
-#  name: "${friendly_name} TMP117 #1"
-#  address: 0x48
-#  update_interval: 60s
-  
-#- platform: tmp117
-#  name: "${friendly_name} TMP117 #2"
-#  address: 0x49
-#  update_interval: 60s
+  pin: A1
     
 - platform: dallas
   name: "${friendly_name} Temperature Input"
@@ -117,10 +112,10 @@ sensor:
     - exponential_moving_average:
         alpha: 0.1
         send_every: 1
-  on_value:
-    - climate.control:
-        id: box_thermostat
-        target_temperature: !lambda return x + 1.0;
+#  on_value:
+#    - climate.control:
+#        id: box_thermostat
+#        target_temperature: !lambda return x + 1.0;
 
 - platform: dallas
   name: "${friendly_name} Temperature Output"
@@ -133,25 +128,24 @@ sensor:
         alpha: 0.1
         send_every: 1
 
-- platform: template
-  id: box_in_temperature_min
-  lambda: |-
-    return id(box_thermostat).target_temperature - id(box_thermostat).cool_deadband();
-  update_interval: 1s
+#- platform: template
+#  id: box_in_temperature_min
+#  lambda: |-
+#    return id(box_thermostat).target_temperature - id(box_thermostat).cool_deadband();
+#  update_interval: 1s
 
-- platform: template
-  id: box_in_temperature_max
-  lambda: |-
-    return id(box_thermostat).target_temperature + id(box_thermostat).cool_overrun();
-  update_interval: 1s
+#- platform: template
+#  id: box_in_temperature_max
+#  lambda: |-
+#    return id(box_thermostat).target_temperature + id(box_thermostat).cool_overrun();
+#  update_interval: 1s
 
 output:
   - platform: ledc
     id: box_fan_speed
-    pin: 25
+    pin: A2
     frequency: "25000 Hz" 
     min_power: 25%
-#    max_power: 80%
 
 #fan:
 #  - platform: speed
@@ -159,26 +153,28 @@ output:
 #    output: box_fan_speed
 #    name: "${friendly_name} Fan Speed"
 
-climate:
-  - platform: thermostat
-    name: "Box Fan Thermostat"
-    id: box_thermostat    
-    sensor: box_out_temperature
-    default_target_temperature_high: 22 °C
-    min_cooling_off_time: 15s
-    min_cooling_run_time: 60s
-    min_idle_time: 2s
-    cool_deadband: 0.25
-    cool_overrun: 0.25
-    cool_action:
-      - output.turn_on: box_fan_speed
-    idle_action:
-      - output.turn_off: box_fan_speed
-    visual:
-      min_temperature: 5 °C
-      max_temperature: 50 °C
-      temperature_step: 0.1 °C
-
+#climate:
+#  - platform: thermostat
+#    name: "Box Fan Thermostat"
+#    id: box_thermostat    
+#    sensor: box_out_temperature
+#    min_cooling_off_time: 15s
+#    min_cooling_run_time: 60s
+#    min_idle_time: 2s
+#    cool_deadband: 0.25
+#    cool_overrun: 0.25
+#    cool_action:
+#      - output.turn_on: box_fan_speed
+#    idle_action:
+#      - output.turn_off: box_fan_speed
+#    visual:
+#      min_temperature: 5 °C
+#      max_temperature: 50 °C
+#      temperature_step: 0.1 °C
+#    preset:
+#      - name: HOME
+#        default_target_temperature_high: 22 °C
+#
 #graph:
 #  - id: single_temperature_graph
 #    duration: 5min
@@ -217,51 +213,51 @@ climate:
 #    - sensor: box_out_temperature
 #      line_type: SOLID
 #      line_thickness: 1
-
-#interval:
-#  - interval: 5s
-#    then:
-#      - display.page.show_next: my_display
-#      - component.update: my_display
-      
+#
+##interval:
+##  - interval: 5s
+##    then:
+##      - display.page.show_next: my_display
+##      - component.update: my_display
+#      
 #display:
-#  - platform: sh1107_i2c
-#    model: SH1107 64X128
-#    id: my_display
-#    rotation: 90
-#    contrast: 1%
-#    address: 0x3c
-#    pages:
-#      - id: page1
-#        lambda: |-
-#          it.print(128,       64, id(f_mdi_12),     TextAlign::BOTTOM_RIGHT, 
-#          id(box_thermostat).action != 2 ? "\U000F081D" :"\U000F0210");
-#          
-#          it.print(0,  0, id(f_label), "INPUT");
-#          it.printf(0, 9, id(f_temperature), "%.1f°", id(box_in_temperature).state);
-#          
-#          it.print(42,  0, id(f_label), "OUTPUT");
-#          it.printf(42, 9, id(f_temperature), "%.1f°", id(box_out_temperature).state);
-#          
-#          it.print(84,  0, id(f_label), "OFFSET");
-#          it.printf(84, 9, id(f_temperature), "%.2f°", id(box_out_temperature).state - id(box_in_temperature).state);
-#          
-#          //it.print(0, 21, id(f_label), "FAN");
-#          //it.printf(0, 30, id(f_temperature), "%d%%", id(box_fan).speed);
-#          
-#          it.print(42, 21, id(f_label), "RPM");
-#          it.printf(42, 30, id(f_temperature), "%.0f", id(foo).state);
-#          
-#          //it.horizontal_line(0, 30, 128);
-#          
-#      - id: page2
-#        lambda: |-
-#          it.graph(0, 0, id(single_temperature_graph));
-#
-#      - id: page3
-#        lambda: |-
-#          it.graph(0, 0, id(single_temperature_graph_fast));
-#
+##  - platform: sh1107_i2c
+##    model: SH1107 64X128
+##    id: my_display
+##    rotation: 90
+##    contrast: 1%
+##    address: 0x3c
+##    pages:
+##      - id: page1
+##        lambda: |-
+##          it.print(128,       64, id(f_mdi_12),     TextAlign::BOTTOM_RIGHT, 
+##          id(box_thermostat).action != 2 ? "\U000F081D" :"\U000F0210");
+##          
+##          it.print(0,  0, id(f_label), "INPUT");
+##          it.printf(0, 9, id(f_temperature), "%.1f°", id(box_in_temperature).state);
+##          
+##          it.print(42,  0, id(f_label), "OUTPUT");
+##          it.printf(42, 9, id(f_temperature), "%.1f°", id(box_out_temperature).state);
+##          
+##          it.print(84,  0, id(f_label), "OFFSET");
+##          it.printf(84, 9, id(f_temperature), "%.2f°", id(box_out_temperature).state - id(box_in_temperature).state);
+##          
+##          //it.print(0, 21, id(f_label), "FAN");
+##          //it.printf(0, 30, id(f_temperature), "%d%%", id(box_fan).speed);
+##          
+##          it.print(42, 21, id(f_label), "RPM");
+##          it.printf(42, 30, id(f_temperature), "%.0f", id(foo).state);
+##          
+##          //it.horizontal_line(0, 30, 128);
+##          
+##      - id: page2
+##        lambda: |-
+##          it.graph(0, 0, id(single_temperature_graph));
+##
+##      - id: page3
+##        lambda: |-
+##          it.graph(0, 0, id(single_temperature_graph_fast));
+##
 #  - platform: sh1107_i2c
 #    model: SH1107 128X128
 #    id: my_display2
@@ -269,30 +265,30 @@ climate:
 #    contrast: 1%
 #    address: 0x3d
 #    pages:
-#      - id: page2_1
-#        lambda: |-
-#          it.print(128,       64, id(f_mdi_12),     TextAlign::BOTTOM_RIGHT, 
-#          id(box_thermostat).action != 2 ? "\U000F081D" :"\U000F0210");
-#          
-#          it.print(0,  0, id(f_label), "INPUT");
-#          it.printf(0, 9, id(f_temperature), "%.1f°", id(box_in_temperature).state);
-#          
-#          it.print(42,  0, id(f_label), "OUTPUT");
-#          it.printf(42, 9, id(f_temperature), "%.1f°", id(box_out_temperature).state);
-#          
-#          it.print(84,  0, id(f_label), "OFFSET");
-#          it.printf(84, 9, id(f_temperature), "%.2f°", id(box_out_temperature).state - id(box_in_temperature).state);
-#          
-#          //it.print(0, 21, id(f_label), "FAN");
-#          //it.printf(0, 30, id(f_temperature), "%d%%", id(box_fan).speed);
-#          
-#          it.print(42, 21, id(f_label), "RPM");
-#          it.printf(42, 30, id(f_temperature), "%.0f", id(foo).state);
-#          
-#          //it.horizontal_line(0, 30, 128);
-#          
-#          it.graph(0, 65, id(single_temperature_graph_fast));
-#          
+##      - id: page2_1
+##        lambda: |-
+##          it.print(128,       64, id(f_mdi_12),     TextAlign::BOTTOM_RIGHT, 
+##          id(box_thermostat).action != 2 ? "\U000F081D" :"\U000F0210");
+##          
+##          it.print(0,  0, id(f_label), "INPUT");
+##          it.printf(0, 9, id(f_temperature), "%.1f°", id(box_in_temperature).state);
+##          
+##          it.print(42,  0, id(f_label), "OUTPUT");
+##          it.printf(42, 9, id(f_temperature), "%.1f°", id(box_out_temperature).state);
+##          
+##          it.print(84,  0, id(f_label), "OFFSET");
+##          it.printf(84, 9, id(f_temperature), "%.2f°", id(box_out_temperature).state - id(box_in_temperature).state);
+##          
+##          //it.print(0, 21, id(f_label), "FAN");
+##          //it.printf(0, 30, id(f_temperature), "%d%%", id(box_fan).speed);
+##          
+##          it.print(42, 21, id(f_label), "RPM");
+##          it.printf(42, 30, id(f_temperature), "%.0f", id(foo).state);
+##          
+##          //it.horizontal_line(0, 30, 128);
+##          
+##          it.graph(0, 65, id(single_temperature_graph_fast));
+##          
 #      - id: page2_2
 #        lambda: |-
 #          it.graph(0, 0, id(single_temperature_graph));
