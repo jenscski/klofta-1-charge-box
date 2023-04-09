@@ -14,10 +14,10 @@ esphome:
         green: 0
         blue: 0
     - delay: 2s
-#    - climate.control:
-#        id: box_thermostat
-#        mode: COOL
-#        preset: HOME
+    - climate.control:
+        id: box_thermostat
+        mode: COOL
+        preset: HOME
     - light.turn_on:
         id: status_led
         brightness: 25%
@@ -29,15 +29,12 @@ esp32:
   board: adafruit_qtpy_esp32
   framework:
     type: arduino
-    version: 2.0.5
-    platform_version: 5.2.0
+#    version: 2.0.6
+#    platform_version: platformio/espressif32 @ 5.3.0
 
 external_components:
   - source: github://jenscski/esphome-components@main
     components: [ sh1107_base, sh1107_i2c ]
-  - source: github://jenscski/esphome@adafruit_qtpy_esp32_v2
-    refresh: 0s
-    components: [ esp32, dallas, wifi ]
 
 i2c:
   frequency: 800kHz
@@ -56,20 +53,22 @@ logger:
     pulse_counter: INFO
 #    json: DEBUG
 #    sensor.filter: DEBUG
-#    api.service: DEBUG
-#    scheduler: DEBUG
+    api.service: DEBUG
+    scheduler: DEBUG
+    i2c.arduini: DEBUG
     
 ota:
   password: !secret 'ota_password'
 
 wifi:
+  use_address: 192.168.30.48
+  fast_connect: true
   networks:
   - ssid: !secret 'wifi_ssid'
     password: !secret 'wifi_password'
-    priority: 0.0
 
 dallas:
-  - pin: A3
+  - pin: A0
     update_interval: 1s
 
 switch:
@@ -99,27 +98,12 @@ sensor:
 - platform: pulse_counter
   name: "${friendly_name} RPM"
   update_interval: 1s
-  id: foo
-  pin: A1
+  id: fan_rpm
+  pin: A2
     
 - platform: dallas
   name: "${friendly_name} Temperature Input"
   id: box_in_temperature
-  accuracy_decimals: 3
-  address: '0xca0000001482d228'
-  filters:
-    - filter_out: nan
-    - exponential_moving_average:
-        alpha: 0.1
-        send_every: 1
-#  on_value:
-#    - climate.control:
-#        id: box_thermostat
-#        target_temperature: !lambda return x + 1.0;
-
-- platform: dallas
-  name: "${friendly_name} Temperature Output"
-  id: box_out_temperature
   accuracy_decimals: 3
   address: '0xf900000014d60e28'
   filters:
@@ -127,192 +111,188 @@ sensor:
     - exponential_moving_average:
         alpha: 0.1
         send_every: 1
+  on_value:
+    - climate.control:
+        id: box_thermostat
+        target_temperature: !lambda return x + 1.0;
 
-#- platform: template
-#  id: box_in_temperature_min
-#  lambda: |-
-#    return id(box_thermostat).target_temperature - id(box_thermostat).cool_deadband();
-#  update_interval: 1s
+- platform: dallas
+  name: "${friendly_name} Temperature Output"
+  id: box_out_temperature
+  accuracy_decimals: 3
+  address: '0xca0000001482d228'
+  filters:
+    - filter_out: nan
+    - exponential_moving_average:
+        alpha: 0.1
+        send_every: 1
 
-#- platform: template
-#  id: box_in_temperature_max
-#  lambda: |-
-#    return id(box_thermostat).target_temperature + id(box_thermostat).cool_overrun();
-#  update_interval: 1s
+- platform: template
+  id: box_in_temperature_min
+  name: "${friendly_name} Temperature Input Min"
+  state_class: measurement
+  unit_of_measurement: °C
+  device_class: temperature
+  lambda: |-
+    return id(box_thermostat).target_temperature - id(box_thermostat).cool_deadband();
+  update_interval: 1s
+
+- platform: template
+  id: box_in_temperature_max
+  name: "${friendly_name} Temperature Input Max"
+  state_class: measurement
+  unit_of_measurement: °C
+  device_class: temperature
+  lambda: |-
+    return id(box_thermostat).target_temperature + id(box_thermostat).cool_overrun();
+  update_interval: 1s
 
 output:
   - platform: ledc
     id: box_fan_speed
-    pin: A2
+    pin: A1
     frequency: "25000 Hz" 
     min_power: 25%
 
-#fan:
-#  - platform: speed
-#    id: box_fan
-#    output: box_fan_speed
-#    name: "${friendly_name} Fan Speed"
+# fan:
+#   - platform: speed
+#     id: box_fan
+#     output: box_fan_speed
+#     name: "${friendly_name} Fan Speed"
 
-#climate:
-#  - platform: thermostat
-#    name: "Box Fan Thermostat"
-#    id: box_thermostat    
-#    sensor: box_out_temperature
-#    min_cooling_off_time: 15s
-#    min_cooling_run_time: 60s
-#    min_idle_time: 2s
-#    cool_deadband: 0.25
-#    cool_overrun: 0.25
-#    cool_action:
-#      - output.turn_on: box_fan_speed
-#    idle_action:
-#      - output.turn_off: box_fan_speed
-#    visual:
-#      min_temperature: 5 °C
-#      max_temperature: 50 °C
-#      temperature_step: 0.1 °C
-#    preset:
-#      - name: HOME
-#        default_target_temperature_high: 22 °C
-#
-#graph:
-#  - id: single_temperature_graph
-#    duration: 5min
-#    width: 128
-#    height: 64
-#    border: true
-#    traces:
-#    - sensor: box_in_temperature
-#      line_type: DASHED
-#      line_thickness: 1
+climate:
+  - platform: thermostat
+    name: "Box Fan Thermostat"
+    id: box_thermostat    
+    sensor: box_out_temperature
+    min_cooling_off_time: 15s
+    min_cooling_run_time: 60s
+    min_idle_time: 2s
+    cool_deadband: 0.25
+    cool_overrun: 0.25
+    cool_action:
+      - output.turn_on: box_fan_speed
+    idle_action:
+      - output.turn_off: box_fan_speed
+    visual:
+      min_temperature: 5 °C
+      max_temperature: 50 °C
+      temperature_step: 0.1 °C
+    preset:
+      - name: HOME
+        default_target_temperature_high: 50 °C
+
+graph:
+  - id: single_temperature_graph
+    duration: 5min
+    width: 128
+    height: 128
+    border: true
+    traces:
+    - sensor: box_in_temperature
+      line_type: DASHED
+      line_thickness: 1
 #    - sensor: box_in_temperature_min
 #      line_type: DOTTED
 #      line_thickness: 1
 #    - sensor: box_in_temperature_max
 #      line_type: DOTTED
 #      line_thickness: 1
-#    - sensor: box_out_temperature
-#      line_type: SOLID
-#      line_thickness: 1
-#      
-#  - id: single_temperature_graph_fast
-#    duration: 128s
-#    width: 128
-#    height: 64
-#    border: true
-#    traces:
-#    - sensor: box_in_temperature
-#      line_type: DASHED
-#      line_thickness: 1
-#    - sensor: box_in_temperature_min
-#      line_type: DOTTED
-#      line_thickness: 1
-#    - sensor: box_in_temperature_max
-#      line_type: DOTTED
-#      line_thickness: 1
-#    - sensor: box_out_temperature
-#      line_type: SOLID
-#      line_thickness: 1
-#
-##interval:
-##  - interval: 5s
-##    then:
-##      - display.page.show_next: my_display
-##      - component.update: my_display
-#      
-#display:
-##  - platform: sh1107_i2c
-##    model: SH1107 64X128
-##    id: my_display
-##    rotation: 90
-##    contrast: 1%
-##    address: 0x3c
-##    pages:
-##      - id: page1
-##        lambda: |-
-##          it.print(128,       64, id(f_mdi_12),     TextAlign::BOTTOM_RIGHT, 
-##          id(box_thermostat).action != 2 ? "\U000F081D" :"\U000F0210");
-##          
-##          it.print(0,  0, id(f_label), "INPUT");
-##          it.printf(0, 9, id(f_temperature), "%.1f°", id(box_in_temperature).state);
-##          
-##          it.print(42,  0, id(f_label), "OUTPUT");
-##          it.printf(42, 9, id(f_temperature), "%.1f°", id(box_out_temperature).state);
-##          
-##          it.print(84,  0, id(f_label), "OFFSET");
-##          it.printf(84, 9, id(f_temperature), "%.2f°", id(box_out_temperature).state - id(box_in_temperature).state);
-##          
-##          //it.print(0, 21, id(f_label), "FAN");
-##          //it.printf(0, 30, id(f_temperature), "%d%%", id(box_fan).speed);
-##          
-##          it.print(42, 21, id(f_label), "RPM");
-##          it.printf(42, 30, id(f_temperature), "%.0f", id(foo).state);
-##          
-##          //it.horizontal_line(0, 30, 128);
-##          
-##      - id: page2
-##        lambda: |-
-##          it.graph(0, 0, id(single_temperature_graph));
-##
-##      - id: page3
-##        lambda: |-
-##          it.graph(0, 0, id(single_temperature_graph_fast));
-##
-#  - platform: sh1107_i2c
-#    model: SH1107 128X128
-#    id: my_display2
-#    rotation: 90
-#    contrast: 1%
-#    address: 0x3d
-#    pages:
-##      - id: page2_1
-##        lambda: |-
-##          it.print(128,       64, id(f_mdi_12),     TextAlign::BOTTOM_RIGHT, 
-##          id(box_thermostat).action != 2 ? "\U000F081D" :"\U000F0210");
-##          
-##          it.print(0,  0, id(f_label), "INPUT");
-##          it.printf(0, 9, id(f_temperature), "%.1f°", id(box_in_temperature).state);
-##          
-##          it.print(42,  0, id(f_label), "OUTPUT");
-##          it.printf(42, 9, id(f_temperature), "%.1f°", id(box_out_temperature).state);
-##          
-##          it.print(84,  0, id(f_label), "OFFSET");
-##          it.printf(84, 9, id(f_temperature), "%.2f°", id(box_out_temperature).state - id(box_in_temperature).state);
-##          
-##          //it.print(0, 21, id(f_label), "FAN");
-##          //it.printf(0, 30, id(f_temperature), "%d%%", id(box_fan).speed);
-##          
-##          it.print(42, 21, id(f_label), "RPM");
-##          it.printf(42, 30, id(f_temperature), "%.0f", id(foo).state);
-##          
-##          //it.horizontal_line(0, 30, 128);
-##          
-##          it.graph(0, 65, id(single_temperature_graph_fast));
-##          
+    - sensor: box_out_temperature
+      line_type: SOLID
+      line_thickness: 1
+      
+  - id: single_temperature_graph_fast
+    duration: 128s
+    width: 128
+    height: 86
+    border: true
+    traces:
+    - sensor: box_in_temperature
+      line_type: DASHED
+      line_thickness: 1
+    # - sensor: box_in_temperature_min
+    #   line_type: DOTTED
+    #   line_thickness: 1
+    # - sensor: box_in_temperature_max
+    #   line_type: DOTTED
+    #   line_thickness: 1
+    - sensor: box_out_temperature
+      line_type: SOLID
+      line_thickness: 1
+
+interval:
+  - interval: 5s
+    then:
+      - display.page.show_next: display0
+      - component.update: display0
+
+display:
+  - platform: sh1107_i2c
+    model: SH1107 128X128
+    id: display0
+    rotation: 0
+    contrast: 1%
+    address: 0x3d
+    update_interval: 1s
+    pages:
+      - id: lilje
+        lambda: |-
+          it.print(128/2,  0, id(f_24), TextAlign::TOP_CENTER, "KLØFTA 1");
+          it.print(128/2, 24, id(f_16), TextAlign::TOP_CENTER, "SPEIDERGRUPPE");
+          it.image(20, 40, id(speiderlilje_88), COLOR_OFF, COLOR_ON);
+
+      - id: page2_1
+        lambda: |-
+          it.print(128 - 21, 21, id(f_mdi_12), TextAlign::CENTER, 
+            id(box_thermostat).action != 2 ? "\U000F081D" :"\U000F0210");
+          
+          it.print(0,  0, id(f_label), "INPUT");
+          it.printf(0, 9, id(f_temperature), "%.1f°", id(box_in_temperature).state);
+          
+          it.print(42,  0, id(f_label), "OUTPUT");
+          it.printf(42, 9, id(f_temperature), "%.1f°", id(box_out_temperature).state);
+          
+          it.print(0,  21, id(f_label), "OFFSET");
+          it.printf(0, 30, id(f_temperature), "%.2f°", id(box_out_temperature).state - id(box_in_temperature).state);
+          
+          it.print(42, 21, id(f_label), "RPM");
+          it.printf(42, 30, id(f_temperature), "%.0f", id(fan_rpm).state);
+          
+          //it.horizontal_line(0, 42, 128);
+          
+          it.graph(0, 42, id(single_temperature_graph_fast));
+          
 #      - id: page2_2
 #        lambda: |-
-#          it.graph(0, 0, id(single_temperature_graph));
-#          
-#      - id: page2_3
-#        lambda: |-
-#          it.image(0, 0, id(my_image));          
-#
-#image:
-#  - file: "speiderlilje.png"
-#    id: my_image
-#
-#font:
-#  - file: gfonts://Azeret Mono@Regular
-#    id: f_label
-#    size: 8
-#    glyphs: INPUTOFSEARM
-#  - file: gfonts://Azeret Mono@Regular
-#    id: f_temperature
-#    size: 10
-#    glyphs: -0123456789.°%na
-#  - file: fonts/materialdesignicons-webfont.ttf
-#    size: 24
-#    id: f_mdi_12
-#    glyphs:
-#      - "\U000F081D" # mdi-fan-off
-#      - "\U000F0210" # mdi-fan
+#          it.graph(0, 0, id(single_temperature_graph));       
+
+image:
+  - file: "speiderlilje.png"
+    id: my_image
+  - file: "speiderlilje_88.png"
+    id: speiderlilje_88
+
+font:
+  - file: gfonts://Azeret Mono@Regular
+    id: f_label
+    size: 8
+    glyphs: INPUTOFSEARM
+  - file: gfonts://Azeret Mono@Regular
+    id: f_24
+    size: 24
+    glyphs: 'KLØFTA 1'
+  - file: gfonts://Azeret Mono@Regular
+    id: f_16
+    size: 16
+    glyphs: 'SPEIDGRU'
+  - file: gfonts://Azeret Mono@Regular
+    id: f_temperature
+    size: 10
+    glyphs: -0123456789.°%na
+  - file: fonts/materialdesignicons-webfont.ttf
+    size: 40
+    id: f_mdi_12
+    glyphs:
+      - "\U000F081D" # mdi-fan-off
+      - "\U000F0210" # mdi-fan
