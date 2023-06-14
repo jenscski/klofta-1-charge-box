@@ -29,8 +29,6 @@ esp32:
   board: adafruit_qtpy_esp32
   framework:
     type: arduino
-#    version: 2.0.6
-#    platform_version: platformio/espressif32 @ 5.3.0
 
 external_components:
   - source: github://jenscski/esphome-components@main
@@ -56,7 +54,12 @@ logger:
     api.service: DEBUG
     scheduler: DEBUG
     i2c.arduini: DEBUG
-    
+
+web_server:
+  local: true
+  ota: false
+  version: 2
+
 ota:
   password: !secret 'ota_password'
 
@@ -66,6 +69,7 @@ wifi:
   networks:
   - ssid: !secret 'wifi_ssid'
     password: !secret 'wifi_password'
+  ap:
 
 dallas:
   - pin: A0
@@ -79,6 +83,13 @@ switch:
     internal: true
     pin: NEOPIXEL_POWER
     restore_mode: ALWAYS_ON
+  - platform: gpio
+    id: status_light
+    internal: true
+    name: "Status Light"
+    pin:
+      number: SCK
+      mode: OUTPUT
 
 light:
   - platform: neopixelbus
@@ -104,7 +115,7 @@ sensor:
 - platform: dallas
   name: "${friendly_name} Temperature Input"
   id: box_in_temperature
-  accuracy_decimals: 3
+  accuracy_decimals: 2
   address: '0xf900000014d60e28'
   filters:
     - filter_out: nan
@@ -119,33 +130,34 @@ sensor:
 - platform: dallas
   name: "${friendly_name} Temperature Output"
   id: box_out_temperature
-  accuracy_decimals: 3
+  accuracy_decimals: 2
   address: '0xca0000001482d228'
   filters:
     - filter_out: nan
+    - offset: -0.264
     - exponential_moving_average:
         alpha: 0.1
         send_every: 1
 
-- platform: template
-  id: box_in_temperature_min
-  name: "${friendly_name} Temperature Input Min"
-  state_class: measurement
-  unit_of_measurement: °C
-  device_class: temperature
-  lambda: |-
-    return id(box_thermostat).target_temperature - id(box_thermostat).cool_deadband();
-  update_interval: 1s
+#- platform: template
+#  id: box_in_temperature_min
+#  name: "${friendly_name} Temperature Input Min"
+#  state_class: measurement
+#  unit_of_measurement: °C
+#  device_class: temperature
+#  lambda: |-
+#    return id(box_thermostat).target_temperature - id(box_thermostat).cool_deadband();
+#  update_interval: 1s
 
-- platform: template
-  id: box_in_temperature_max
-  name: "${friendly_name} Temperature Input Max"
-  state_class: measurement
-  unit_of_measurement: °C
-  device_class: temperature
-  lambda: |-
-    return id(box_thermostat).target_temperature + id(box_thermostat).cool_overrun();
-  update_interval: 1s
+#- platform: template
+#  id: box_in_temperature_max
+#  name: "${friendly_name} Temperature Input Max"
+#  state_class: measurement
+#  unit_of_measurement: °C
+#  device_class: temperature
+#  lambda: |-
+#    return id(box_thermostat).target_temperature + id(box_thermostat).cool_overrun();
+#  update_interval: 1s
 
 output:
   - platform: ledc
@@ -172,8 +184,10 @@ climate:
     cool_overrun: 0.25
     cool_action:
       - output.turn_on: box_fan_speed
+      - switch.turn_on: status_light
     idle_action:
       - output.turn_off: box_fan_speed
+      - switch.turn_off: status_light
     visual:
       min_temperature: 5 °C
       max_temperature: 50 °C
@@ -263,9 +277,9 @@ display:
           
           it.graph(0, 42, id(single_temperature_graph_fast));
           
-#      - id: page2_2
-#        lambda: |-
-#          it.graph(0, 0, id(single_temperature_graph));       
+      - id: page2_2
+        lambda: |-
+          it.graph(0, 0, id(single_temperature_graph));       
 
 image:
   - file: "speiderlilje.png"
